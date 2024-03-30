@@ -1,0 +1,33 @@
+import boto3
+
+def lambda_handler(event, context):
+   
+    ec2_client = boto3.client('ec2')
+    s3_client = boto3.client('s3')
+ 
+    unencrypted_ebs_volumes = []
+    response = ec2_client.describe_volumes()
+    for volume in response['Volumes']:
+        if 'Encrypted' in volume and not volume['Encrypted']:
+            unencrypted_ebs_volumes.append(volume['VolumeId'])
+    
+ 
+    unencrypted_s3_buckets = []
+    response = s3_client.list_buckets()
+    for bucket in response['Buckets']:
+        bucket_name = bucket['Name']
+        try:
+            bucket_encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
+        except s3_client.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
+                unencrypted_s3_buckets.append(bucket_name)
+    
+ 
+    print("Unencrypted EBS volumes:", unencrypted_ebs_volumes)
+    print("Unencrypted S3 buckets:", unencrypted_s3_buckets)
+    
+
+    return {
+        "UnencryptedEBSVolumes": unencrypted_ebs_volumes,
+        "UnencryptedS3Buckets": unencrypted_s3_buckets
+    }
